@@ -15,13 +15,15 @@ parser.add_argument("--ip", default="127.0.0.1", help="The IP of the DisplayOSC 
 parser.add_argument("--port", type=int, default=6100, help="The port the DisplayOSC server is listening on")
 args = parser.parse_args()
 
-def send_text(a, b, c):
-	return
-
 class Orac:
+	MAX_LINES = 5
+	MAX_PARAMS = 8
+
 	def __init__(self, ip, port):
-		self.lines = [""]*6
+		self.lines = [""]*Orac.MAX_LINES
 		self.selectedLine = 0
+
+		self.params = [{"name": "", "value": "", "ctrl": 0.0} for _ in range(Orac.MAX_PARAMS)]
 
 		self.client = udp_client.SimpleUDPClient(args.ip, args.port)
 		self.client.send_message("/Connect", 6111)
@@ -31,12 +33,18 @@ class Orac:
 		self.oscDispatcher.map("/text", self.textHandler)
 		self.oscDispatcher.map("/selectText", self.selectTextHandler)
 		self.oscDispatcher.map("/clearText", self.clearTextHandler)
+		self.oscDispatcher.map("/P*Desc", self.paramDescHandler)
+		self.oscDispatcher.map("/P*Ctrl", self.paramCtrlHandler)
+		self.oscDispatcher.map("/P*Value", self.paramValueHandler)
 		self.oscDispatcher.map("/*", self.allOtherHandler)
 
 		self.server = BlockingOSCUDPServer(('', 6111), self.oscDispatcher)
 
 		self.linesClearedCallbacks = []
 		self.lineChangedCallbacks = []
+		self.paramNameChangedCallbacks = []
+		self.paramValueChangedCallbacks = []
+		self.paramCtrlChangedCallbacks = []
 
 		self.lineChangedNotificationsEnabled = True
 		self.timer = None
@@ -63,6 +71,15 @@ class Orac:
 	def addLineChangedCallback(self, cb):
 		self.lineChangedCallbacks.append(cb)
 
+	def addParamNameChangedCallback(self, cb):
+		self.paramNameChangedCallbacks.append(cb)
+
+	def addParamValueChangedCallback(self, cb):
+		self.paramValueChangedCallbacks.append(cb)
+
+	def addParamCtrlChangedCallback(self, cb):
+		self.paramCtrlChangedCallbacks.append(cb)
+
 	def notifyLinesCleared(self):
 		for cb in self.linesClearedCallbacks:
 			cb(self)
@@ -71,12 +88,24 @@ class Orac:
 		for cb in self.lineChangedCallbacks:
 			cb(self, line, text, selected)
 
+	def notifyParamNameChanged(self, i, name):
+		for cb in self.paramNameChangedCallbacks:
+			cb(self, i, name)
+
+	def notifyParamValueChanged(self, i, value):
+		for cb in self.paramValueChangedCallbacks:
+			cb(self, i, value)
+
+	def notifyParamCtrlChanged(self, i, ctrl):
+		for cb in self.paramCtrlChangedCallbacks:
+			cb(self, i, ctrl)
+
 	def run(self):
 		self.server.serve_forever()
 
 	def textHandler(self, address, *osc_arguments):
 		print("%d: %s" % (osc_arguments[0], osc_arguments[1]))
-		i = osc_arguments[0]
+		i = osc_arguments[0]-1
 		if self.lines[i] != osc_arguments[1]:
 			self.lines[i] = osc_arguments[1]
 			if self.lineChangedNotificationsEnabled:
@@ -84,7 +113,7 @@ class Orac:
 
 	def selectTextHandler(self, address, *osc_arguments):
 		print("select %d" % osc_arguments[0])
-		i = osc_arguments[0]
+		i = osc_arguments[0]-1
 		if self.selectedLine != i:
 			if self.lineChangedNotificationsEnabled:
 				self.notifyLineChanged(self.selectedLine, self.lines[self.selectedLine], False)
@@ -93,10 +122,10 @@ class Orac:
 				self.notifyLineChanged(i, self.lines[i], True)
 
 	def handleScreenUpdate(self):
-		if self.lines == [""]*6:
+		if self.lines == [""]*Orac.MAX_LINES:
 			self.notifyLinesCleared()
 		else:
-			for i in range(6):
+			for i in range(Orac.MAX_LINES):
 				if self.linesSnapshot[i] != self.lines[i]:
 					self.notifyLineChanged(i, self.lines[i], i == self.selectedLine)
 
@@ -106,7 +135,6 @@ class Orac:
 	def clearTextHandler(self, address, *osc_arguments):
 		self.lineChangedNotificationsEnabled = False
 
-		#print("Setting up timer")
 		if self.timer != None:
 			self.timer.cancel()
 		else:
@@ -115,7 +143,29 @@ class Orac:
 		self.timer = Timer(0.2, self.handleScreenUpdate)
 		self.timer.start()
 
-		self.lines = [""]*6
+		self.lines = [""]*Orac.MAX_LINES
+
+	@staticmethod
+	def decodeParamId(oscAddress):
+		return ord(oscAddress[2]) - ord('1')
+
+	def paramDescHandler(self, address, *osc_arguments):
+		i = Orac.decodeParamId(address)
+		if self.params[i]["name"] != osc_arguments[0]:
+			self.params[i]["name"] = osc_arguments[0]
+			self.notifyParamNameChanged(i, osc_arguments[0])
+
+	def paramValueHandler(self, address, *osc_arguments):
+		i = Orac.decodeParamId(address)
+		if self.params[i]["value"] != osc_arguments[0]:
+			self.params[i]["value"] = osc_arguments[0]
+			self.notifyParamValueChanged(i, osc_arguments[0])
+
+	def paramCtrlHandler(self, address, *osc_arguments):
+		i = Orac.decodeParamId(address)
+		if self.params[i]["ctrl"] != osc_arguments[0]:
+			self.params[i]["ctrl"] = osc_arguments[0]
+			self.notifyParamCtrlChanged(i, osc_arguments[0])
 
 	def allOtherHandler(self, address, *osc_arguments):
 		print(address, osc_arguments)
@@ -174,19 +224,6 @@ class OracCtl:
 		down = message[0] == 0x90
 		self.notifyInput(OracCtl.Button(message[1]), down)
 
-		#value = 1.0 if pressedDown else 0.0
-		#
-		#if message[1] == 1:
-		#	client.send_message("/NavActivate", value)
-		#elif message[1] == 3:
-		#	client.send_message("/NavNext", value)
-		#elif message[1] == 5:
-		#	client.send_message("/NavPrev", value)
-		#elif message[1] == 2:
-		#	client.send_message("/ModuleNext", value)
-		#elif message[1] == 4:
-		#	client.send_message("/ModulePrev", value)
-
 	def printLine(self, line, text, inverted):
 		msg = [0xf0, 0x01 if inverted else 0x00, line]
 
@@ -197,26 +234,110 @@ class OracCtl:
 
 		self.midiOut.send_message(msg)
 
-	def clearText(self):
-		for i in range(6):
+	def printParam(self, i, name, value):
+		if not name or not value:
 			self.printLine(i, "", False)
+		else:
+			self.printLine(i, "%s: %s" % (name, value), False)
+
+	def printCtrl(self, i, ctrl):
+		msg = [0xf0, 0x02, i, int(ctrl * 127), 0xf7]
+		self.midiOut.send_message(msg)
+
+	def setMaxLineWidth(self, width):
+		msg = [0xf0, 0x04, width, 0xf7]
+		self.midiOut.send_message(msg)
+
+	def clearScreen(self):
+		msg = [0xf0, 0x03, 0xf7]
+		self.midiOut.send_message(msg)
 
 class Controller:
+	class Mode(Enum):
+		UNKNOWN = 0
+		MENU    = 1
+		PARAMS  = 2
+
 	def __init__(self, orac, oracCtl):
+		self.mode = Controller.Mode.UNKNOWN
+		self.lines = [{"text": "", "inverted": False} for _ in range(Orac.MAX_LINES)]
+		self.params = [{"name": "", "value": "", "ctrl": 0.0} for _ in range(Orac.MAX_PARAMS)]
+
 		self.orac = orac
 		self.oracCtl = oracCtl
 		self.oracCtl.addInputCallback(self.onButtonEvent)
 		self.orac.addLineChangedCallback(self.onLineChanged)
 		self.orac.addLinesClearedCallback(self.onLinesCleared)
+		self.orac.addParamNameChangedCallback(self.onParamNameChanged)
+		self.orac.addParamValueChangedCallback(self.onParamValueChanged)
+		self.orac.addParamCtrlChangedCallback(self.onParamCtrlChanged)
+
+		self.setMode(Controller.Mode.MENU)
+
+	def setMode(self, mode):
+		print(self.mode, "->", mode)
+		if self.mode == mode:
+			return
+
+		self.oracCtl.clearScreen()
+
+		if mode == Controller.Mode.MENU:
+			self.oracCtl.setMaxLineWidth(0)
+			for i in range(Orac.MAX_LINES):
+				self.oracCtl.printLine(i, self.lines[i]["text"], self.lines[i]["inverted"])
+		elif mode == Controller.Mode.PARAMS:
+			self.oracCtl.setMaxLineWidth(106)
+			for i in range(Orac.MAX_PARAMS):
+				if self.params[i]["name"] or self.params[i]["value"]:
+					self.oracCtl.printParam(i, self.params[i]["name"], self.params[i]["value"])
+					self.oracCtl.printCtrl(i, self.params[i]["ctrl"])
+
+		self.mode = mode
 
 	def onLinesCleared(self, sender):
-		self.oracCtl.clearText()
+		self.lines = [{"text": "", "inverted": False} for _ in range(Orac.MAX_LINES)]
+		print("linesCleared")
+		if self.mode == Controller.Mode.MENU:
+			self.oracCtl.clearScreen()
 
 	def onLineChanged(self, sender, line, text, inverted):
-		self.oracCtl.printLine(line, text, inverted)
+		self.lines[line]["text"] = text
+		self.lines[line]["inverted"] = inverted
+		print("onLineChanged", line, self.lines[line])
+		if self.mode == Controller.Mode.MENU:
+			self.oracCtl.printLine(line, text, inverted)
+
+		print(self.lines)
+
+	def onParamNameChanged(self, sender, i, name):
+		self.params[i]["name"] = name
+		if self.mode == Controller.Mode.PARAMS:
+			self.oracCtl.printParam(i, self.params[i]["name"], self.params[i]["value"])
+
+	def onParamValueChanged(self, sender, i, value):
+		self.params[i]["value"] = value
+		if self.mode == Controller.Mode.PARAMS:
+			self.oracCtl.printParam(i, self.params[i]["name"], self.params[i]["value"])
+
+	def onParamCtrlChanged(self, sender, i, ctrl):
+		self.params[i]["ctrl"] = ctrl
+		if self.mode == Controller.Mode.PARAMS:
+			self.oracCtl.printCtrl(i, self.params[i]["ctrl"])
 
 	def onButtonEvent(self, sender, button, down):
 		if not down:
+			return
+
+		if button == OracCtl.Button.B:
+			print("opa", self.mode)
+			#if self.mode == Controller.Mode.PARAMS:
+			#	self.setMode(Controller.Mode.MENU)
+			#else:
+			#	self.setMode(Controller.Mode.PARAMS)
+			self.setMode(Controller.Mode.MENU if self.mode == Controller.Mode.PARAMS else Controller.Mode.PARAMS)
+			print("opa", self.mode)
+
+		if self.mode != Controller.Mode.MENU:
 			return
 
 		if button == OracCtl.Button.A:
@@ -237,4 +358,6 @@ ctrl = Controller(orac, oracCtl)
 try:
 	orac.run()
 finally:
+	del oracCtl
+	oracCtl = None
 	print("Done!")
