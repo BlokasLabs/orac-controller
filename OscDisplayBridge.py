@@ -2,6 +2,7 @@ import argparse
 import random
 import time
 import rtmidi
+from threading import Timer
 from enum import Enum
 
 from pythonosc.dispatcher import Dispatcher
@@ -36,6 +37,10 @@ class Orac:
 
 		self.linesClearedCallbacks = []
 		self.lineChangedCallbacks = []
+
+		self.lineChangedNotificationsEnabled = True
+		self.timer = None
+		self.linesSnapshot = None
 
 	def navigationActivate(self):
 		self.client.send_message("/NavActivate", 1.0)
@@ -74,19 +79,43 @@ class Orac:
 		i = osc_arguments[0]
 		if self.lines[i] != osc_arguments[1]:
 			self.lines[i] = osc_arguments[1]
-			self.notifyLineChanged(i, self.lines[i], self.selectedLine == i)
+			if self.lineChangedNotificationsEnabled:
+				self.notifyLineChanged(i, self.lines[i], self.selectedLine == i)
 
 	def selectTextHandler(self, address, *osc_arguments):
 		print("select %d" % osc_arguments[0])
 		i = osc_arguments[0]
 		if self.selectedLine != i:
-			self.notifyLineChanged(self.selectedLine, self.lines[self.selectedLine], False)
+			if self.lineChangedNotificationsEnabled:
+				self.notifyLineChanged(self.selectedLine, self.lines[self.selectedLine], False)
 			self.selectedLine = i
-			self.notifyLineChanged(i, self.lines[i], True)
+			if self.lineChangedNotificationsEnabled:
+				self.notifyLineChanged(i, self.lines[i], True)
+
+	def handleScreenUpdate(self):
+		if self.lines == [""]*6:
+			self.notifyLinesCleared()
+		else:
+			for i in range(6):
+				if self.linesSnapshot[i] != self.lines[i]:
+					self.notifyLineChanged(i, self.lines[i], i == self.selectedLine)
+
+		self.lineChangedNotificationsEnabled = True
+		self.timer = None
 
 	def clearTextHandler(self, address, *osc_arguments):
+		self.lineChangedNotificationsEnabled = False
+
+		#print("Setting up timer")
+		if self.timer != None:
+			self.timer.cancel()
+		else:
+			self.linesSnapshot = self.lines.copy()
+
+		self.timer = Timer(0.2, self.handleScreenUpdate)
+		self.timer.start()
+
 		self.lines = [""]*6
-		self.notifyLinesCleared()
 
 	def allOtherHandler(self, address, *osc_arguments):
 		print(address, osc_arguments)
