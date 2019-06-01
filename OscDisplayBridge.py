@@ -3,7 +3,7 @@ import random
 import time
 import rtmidi
 from threading import Timer
-from enum import Enum
+from enum import IntEnum
 
 from pythonosc.dispatcher import Dispatcher
 from pythonosc.osc_server import BlockingOSCUDPServer
@@ -172,7 +172,7 @@ class Orac:
 
 # Class for interfacing with Midiboy
 class OracCtl:
-	class Button(Enum):
+	class Button(IntEnum):
 		B     = 0
 		A     = 1
 		Right = 2
@@ -244,16 +244,17 @@ class OracCtl:
 		msg = [0xf0, 0x02, i, int(ctrl * 127), 0xf7]
 		self.midiOut.send_message(msg)
 
-	def setMaxLineWidth(self, width):
-		msg = [0xf0, 0x04, width, 0xf7]
-		self.midiOut.send_message(msg)
-
 	def clearScreen(self):
 		msg = [0xf0, 0x03, 0xf7]
 		self.midiOut.send_message(msg)
 
+	def setViewMode(self, mode):
+		msg = [0xf0, 0x04, int(mode), 0xf7]
+		print(msg)
+		self.midiOut.send_message(msg)
+
 class Controller:
-	class Mode(Enum):
+	class Mode(IntEnum):
 		UNKNOWN = 0
 		MENU    = 1
 		PARAMS  = 2
@@ -280,13 +281,12 @@ class Controller:
 			return
 
 		self.oracCtl.clearScreen()
+		self.oracCtl.setViewMode(mode)
 
 		if mode == Controller.Mode.MENU:
-			self.oracCtl.setMaxLineWidth(0)
 			for i in range(Orac.MAX_LINES):
 				self.oracCtl.printLine(i, self.lines[i]["text"], self.lines[i]["inverted"])
 		elif mode == Controller.Mode.PARAMS:
-			self.oracCtl.setMaxLineWidth(106)
 			for i in range(Orac.MAX_PARAMS):
 				if self.params[i]["name"] or self.params[i]["value"]:
 					self.oracCtl.printParam(i, self.params[i]["name"], self.params[i]["value"])

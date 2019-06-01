@@ -113,7 +113,7 @@ public:
 			}
 			else if (b == 0x04)
 			{
-				m_state = STATE_RECEIVING_MAX_LINE_WIDTH;
+				m_state = STATE_RECEIVING_VIEW_MODE;
 			}
 			else m_state = STATE_WAITING_FOR_COMMAND;
 			return;
@@ -139,8 +139,8 @@ public:
 				m_counter = b;
 			}
 			return;
-		case STATE_RECEIVING_MAX_LINE_WIDTH:
-			m_maxWidth = b == 0 ? 128 : b;
+		case STATE_RECEIVING_VIEW_MODE:
+			m_counter = b;
 			return;
 		}
 	}
@@ -160,6 +160,20 @@ private:
 		case STATE_RECEIVING_CTRL:
 			printCtrl(m_textLine, m_counter);
 			break;
+		case STATE_RECEIVING_VIEW_MODE:
+			m_mode = (ViewMode)m_counter;
+			switch (m_mode)
+			{
+			case MODE_MENU:
+				m_maxWidth = 128;
+				input_set_repeat_ms(300);
+				break;
+			case MODE_PARAMS:
+				m_maxWidth = 106;
+				input_set_repeat_ms(100);
+				break;
+			}
+			break;
 		}
 	}
 
@@ -171,11 +185,19 @@ private:
 		STATE_RECEIVING_INVERTED_TEXT,
 		STATE_RECEIVING_CTRL,
 		STATE_RECEIVING_CLEAR_SCREEN,
-		STATE_RECEIVING_MAX_LINE_WIDTH,
+		STATE_RECEIVING_VIEW_MODE,
 		STATE_SYSEX_END,
 	};
 
+	enum ViewMode
+	{
+		MODE_UNKNOWN = 0,
+		MODE_MENU    = 1,
+		MODE_PARAMS  = 2,
+	};
+
 	State m_state;
+	ViewMode m_mode;
 	int8_t m_textLine;
 	uint8_t m_counter;
 	uint8_t m_maxWidth;

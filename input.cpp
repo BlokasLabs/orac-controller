@@ -7,12 +7,17 @@
 enum { MAX_EVENTS = 8 };
 enum { INPUT_DEBOUNCE_MS = 50 };
 enum { INPUT_REPEAT_DELAY_MS = 300 };
-enum { INPUT_REPEAT_MS = 300 };
 
 static TFifo<InputEvent, uint8_t, MAX_EVENTS> g_eventQueue;
 static uint8_t g_state;
 static uint8_t g_repeating;
 static unsigned long g_lastUpdated[BUTTON_COUNT];
+static uint16_t g_inputRepeatMs = 300;
+
+void input_set_repeat_ms(uint16_t ms)
+{
+	g_inputRepeatMs = ms;
+}
 
 static uint8_t readRawInput()
 {
@@ -89,7 +94,7 @@ void input_update()
 			}
 			else
 			{
-				if ((ms - g_lastUpdated[i]) >= INPUT_REPEAT_MS)
+				if ((ms - g_lastUpdated[i]) >= g_inputRepeatMs)
 				{
 					InputEvent e;
 					e.m_button = (Button)i;

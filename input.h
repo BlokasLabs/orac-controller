@@ -1,6 +1,8 @@
 #ifndef INPUT_H
 #define INPUT_H
 
+#include <stdint.h>
+
 enum Button
 {
 	BUTTON_A     = 1,
@@ -27,6 +29,7 @@ struct InputEvent
 
 void input_init();
 void input_update();
+void input_set_repeat_ms(uint16_t ms);
 bool input_get_event(InputEvent &result);
 
 #endif // INPUT_H
