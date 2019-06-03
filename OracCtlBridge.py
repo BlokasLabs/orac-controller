@@ -13,14 +13,14 @@ from pythonosc import osc_message_builder
 from pythonosc import udp_client
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--ip", default="127.0.0.1", help="The IP of the DisplayOSC server")
-parser.add_argument("--port", type=int, default=6100, help="The port the DisplayOSC server is listening on")
+parser.add_argument("--ip", default="127.0.0.1", help="The IP of the Orac Display server")
+parser.add_argument("--port", type=int, default=6100, help="The port the Orac Display server is listening on")
+parser.add_argument("--listen", type=int, default=6111, help="The default port to listen for responses.")
 args = parser.parse_args()
 
 class Orac:
 	MAX_LINES = 5
 	MAX_PARAMS = 8
-	LISTEN_PORT = 6111
 
 	def __init__(self, ip, port):
 		self.lines = [""]*Orac.MAX_LINES
@@ -38,10 +38,10 @@ class Orac:
 		self.oscDispatcher.map("/P*Value", self.paramValueHandler)
 		self.oscDispatcher.map("/*", self.allOtherHandler)
 
-		self.server = BlockingOSCUDPServer(('', Orac.LISTEN_PORT), self.oscDispatcher)
+		self.server = BlockingOSCUDPServer(('', args.listen), self.oscDispatcher)
 
 		self.client = udp_client.SimpleUDPClient(args.ip, args.port)
-		self.client.send_message("/Connect", Orac.LISTEN_PORT)
+		self.client.send_message("/Connect", args.listen)
 
 		self.linesClearedCallbacks = []
 		self.lineChangedCallbacks = []
@@ -428,6 +428,8 @@ ctrl = Controller(orac, oracCtl)
 try:
 	orac.run()
 finally:
+	del ctrl
 	del oracCtl
-	oracCtl = None
+	orac.shutdown()
+	del orac
 	print("Done!")
