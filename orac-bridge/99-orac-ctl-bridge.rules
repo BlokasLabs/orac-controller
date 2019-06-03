@@ -1,0 +1,2 @@
+ACTION=="add", SUBSYSTEM=="sound", ENV{ID_MODEL}=="ORAC-CTL", RUN+="/bin/systemctl start orac-ctl-bridge"
+ACTION=="remove", SUBSYSTEM=="sound", ENV{ID_MODEL}=="ORAC-CTL", RUN+="/bin/systemctl stop orac-ctl-bridge"
