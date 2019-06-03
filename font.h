@@ -19,7 +19,10 @@
 
 #include <avr/pgmspace.h>
 
-enum { FONT_WIDTH = 3 };
+enum { MICRO_FONT_WIDTH = 3 };
 
 // 3x5 font.
 extern const PROGMEM unsigned char MICRO_FONT[288];
+
+enum { FONT_5X7_WIDTH = 5 };
+extern const PROGMEM unsigned char FONT_5X7[475];

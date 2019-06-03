@@ -1,8 +1,10 @@
 #include <usbmidi.h>
 #include "input.h"
 #include "SH1106.h"
-
 #include "font.h"
+
+#define FONT_WIDTH FONT_5X7_WIDTH
+#define FONT FONT_5X7
 
 void setup()
 {
@@ -19,7 +21,7 @@ void print(int8_t line, const char *text, uint8_t n, uint8_t maxWidth, bool inve
 	int16_t space = maxWidth - n*(FONT_WIDTH+1);
 	while (n--)
 	{
-		const uint8_t *p = &MICRO_FONT[(*text++ - ' ') * FONT_WIDTH];
+		const uint8_t *p = &FONT[(*text++ - ' ') * FONT_WIDTH];
 		sh1106_draw_progmem_bitmap(p, FONT_WIDTH, inverted);
 		sh1106_draw_space(1, inverted);
 	}
