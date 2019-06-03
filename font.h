@@ -17,12 +17,16 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
+#ifndef FONT_H
+#define FONT_H
+
 #include <avr/pgmspace.h>
 
-enum { MICRO_FONT_WIDTH = 3 };
-
 // 3x5 font.
+enum { MICRO_FONT_WIDTH = 3 };
 extern const PROGMEM unsigned char MICRO_FONT[288];
 
 enum { FONT_5X7_WIDTH = 5 };
 extern const PROGMEM unsigned char FONT_5X7[475];
+
+#endif // FONT_H

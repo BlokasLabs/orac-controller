@@ -17,7 +17,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-#include <avr/pgmspace.h>
+#include "font.h"
 
 // Font data based on X11 micro which is available as Public Domain font: https://github.com/olikraus/u8g2/wiki/fntgrpx11#micro
 // https://cgit.freedesktop.org/xorg/font/micro-misc/tree/COPYING

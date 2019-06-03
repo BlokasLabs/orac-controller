@@ -18,7 +18,7 @@
  */
 
 #include "input.h"
-#include <fifo.h>
+#include <fifo.h> // From USBMIDI library.
 
 #include <pins_arduino.h>
 #include <arduino.h>

@@ -249,12 +249,12 @@ class OracCtl:
 	def midiInCallback(self, event, data=None):
 		message = event[0]
 
-		if message[0] != 0x90 and message[0] != 0x80 and (message[1] < 0 or message[1] >= 6):
+		if len(message) != 3 or message[0] != 0xf0 or message[1] & 0x3f >= 6 or message[2] != 0xf7:
 			print("Ignoring unexpected message:", message)
 			return
 
-		down = message[0] == 0x90
-		self.notifyInput(OracCtl.Button(message[1]), down)
+		down = (message[1] & 0x40) != 0
+		self.notifyInput(OracCtl.Button(message[1] & 0x3f), down)
 
 	def printLine(self, line, text, inverted):
 		msg = [0xf0, 0x40 if inverted else 0x00, line]

@@ -31,22 +31,39 @@ void setup()
 
 	input_init();
 
-	print(0, "Waiting for OscDisplayBridge...", 31, 128, false);
+	print(0, 0, "Waiting for OracBridge...", 25, 128, false);
 }
 
-void print(int8_t line, const char *text, uint8_t n, uint8_t maxWidth, bool inverted)
+void print(uint8_t x, uint8_t line, const char *text, uint8_t n, uint8_t maxWidth, bool inverted)
 {
-	sh1106_set_position(0, 7-(line&7));
-	int16_t space = maxWidth - n*(FONT_WIDTH+1);
-	while (n--)
+	sh1106_set_position(x, 7-(line&7));
+	uint8_t width = min(n*(FONT_WIDTH+1), maxWidth);
+	uint8_t spaces = maxWidth - width;
+	uint8_t counter = 0;
+	const uint8_t *p = NULL;
+	while (width-- && n)
 	{
-		const uint8_t *p = &FONT[(*text++ - ' ') * FONT_WIDTH];
-		sh1106_draw_progmem_bitmap(p, FONT_WIDTH, inverted);
-		sh1106_draw_space(1, inverted);
+		switch (counter)
+		{
+		case 0:
+			p = &FONT[(*text++ - ' ') * FONT_WIDTH];
+			break;
+		case FONT_WIDTH:
+			--n;
+			break;
+		case FONT_WIDTH+1:
+			sh1106_draw_space(1, inverted);
+			break;
+		default:
+			break;
+		}
+
+		sh1106_draw_progmem_bitmap(*p++, 1, inverted);
+		counter = (counter+1) % (FONT_WIDTH+1);
 	}
-	if (space > 0)
+	if (spaces > 0)
 	{
-		sh1106_draw_space(space, inverted);
+		sh1106_draw_space(spaces, inverted);
 	}
 }
 
@@ -169,7 +186,7 @@ private:
 		switch (m_state)
 		{
 		case STATE_RECEIVING_TEXT:
-			print(m_textLine, g_messageBuffer, m_counter, m_maxWidth, m_inverted);
+			print(0, m_textLine, g_messageBuffer, m_counter, m_maxWidth, m_inverted);
 			break;
 		case STATE_RECEIVING_CLEAR_SCREEN:
 			clearScreen();
@@ -235,9 +252,9 @@ void loop()
 	while (input_get_event(event))
 	{
 		bool on = event.m_event == EVENT_DOWN;
-		USBMIDI.write(on ? 0x90 : 0x80);
-		USBMIDI.write(event.m_button);
-		USBMIDI.write(on ? 100 : 0);
+		USBMIDI.write(0xf0);
+		USBMIDI.write(event.m_button | (on ? 0x40 : 0x00));
+		USBMIDI.write(0xf7);
 	}
 
 	USBMIDI.poll();
