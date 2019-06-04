@@ -2,6 +2,18 @@
 
 ## Getting Started
 
+### 1.0.2 Blokas Boards
+
+It's required to be using 1.0.2 Blokas Boards definition files, here's how to upgrade if necessary:
+
+1. Run Arduino IDE.
+2. Tools->Board->Boards Manager...
+3. Search for 'Blokas'.
+4. If the version shows up as 1.0.2, update is not needed.
+5. Otherwise, highlight the Blokas AVR boards entry and click Install at the bottom right.
+
+### Sketch and Bridge Install
+
 1. Upload orac-controller.ino sketch from orac-controller/ folder to your Midiboy.
 2. Install OracCtlBridge.py on your Raspberry Pi:
     ```
