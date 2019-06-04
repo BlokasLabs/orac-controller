@@ -31,7 +31,9 @@ void setup()
 
 	input_init();
 
-	print(0, 0, "Waiting for OracBridge...", 25, 128, false);
+	print(31, 2, "Waiting for", 11, 128, false);
+	print(34, 3, "OracBridge", 10, 128, false);
+	print(55, 4, "...", 3, 128, false);
 }
 
 void print(uint8_t x, uint8_t line, const char *text, uint8_t n, uint8_t maxWidth, bool inverted)
@@ -49,17 +51,16 @@ void print(uint8_t x, uint8_t line, const char *text, uint8_t n, uint8_t maxWidt
 			p = &FONT[(*text++ - ' ') * FONT_WIDTH];
 			break;
 		case FONT_WIDTH:
-			--n;
-			break;
-		case FONT_WIDTH+1:
 			sh1106_draw_space(1, inverted);
-			break;
+			--n;
+			counter = 0;
+			continue;
 		default:
 			break;
 		}
 
-		sh1106_draw_progmem_bitmap(*p++, 1, inverted);
-		counter = (counter+1) % (FONT_WIDTH+1);
+		sh1106_draw_progmem_bitmap(p++, 1, inverted);
+		++counter;
 	}
 	if (spaces > 0)
 	{
@@ -203,7 +204,7 @@ private:
 				input_set_repeat_ms(300);
 				break;
 			case MODE_PARAMS:
-				m_maxWidth = 105;
+				m_maxWidth = 104;
 				input_set_repeat_ms(100);
 				break;
 			}

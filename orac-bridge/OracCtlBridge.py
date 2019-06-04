@@ -229,6 +229,7 @@ class OracCtl:
 
 		self.midiOut.open_port(OracCtl.findOracCtlPort(self.midiOut))
 		self.midiIn.open_port(OracCtl.findOracCtlPort(self.midiIn))
+		self.midiIn.ignore_types(sysex=False)
 		self.midiIn.set_callback(self.midiInCallback)
 
 		self.inputCallbacks = []
@@ -329,7 +330,8 @@ class Controller:
 					self.oracCtl.printParam(i, self.params[i]["name"], self.params[i]["value"], i == self.selectedParam)
 					self.oracCtl.printCtrl(i, self.params[i]["ctrl"], i == self.selectedParam)
 			if not paramFound:
-				self.oracCtl.printLine(0, "This module has no params!", False)
+				self.oracCtl.printLine(0, "This module has", False)
+				self.oracCtl.printLine(1, "no params!", False)
 
 		self.mode = mode
 
