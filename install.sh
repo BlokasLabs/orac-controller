@@ -13,3 +13,4 @@ install -v -m 644 $BASE_PATH/orac-bridge/99-orac-ctl-bridge.rules /etc/udev/rule
 install -v -m 644 $BASE_PATH/orac-bridge/orac-ctl-bridge.service /usr/lib/systemd/system/
 install -v -m 755 $BASE_PATH/orac-bridge/OracCtlBridge.py /usr/local/bin/
 systemctl daemon-reload
+udevadm control --reload
