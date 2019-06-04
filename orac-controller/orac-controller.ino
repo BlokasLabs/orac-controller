@@ -22,18 +22,33 @@
 #include "SH1106.h"
 #include "font.h"
 
+#include "usbdrv.h"
+
 #define FONT_WIDTH FONT_5X7_WIDTH
 #define FONT FONT_5X7
+
+void showInitialScreen()
+{
+	sh1106_clear();
+	print(31, 2, "Waiting for", 11, 128, false);
+	print(34, 3, "OracBridge", 10, 128, false);
+	print(55, 4, "...", 3, 128, false);
+}
+
+void onUsbSuspended(bool suspended)
+{
+	if (suspended)
+		showInitialScreen();
+}
 
 void setup()
 {
 	sh1106_init(SS, PIN_LCD_DC, PIN_LCD_RESET);
+	showInitialScreen();
+
+	USBMIDI.setSuspendResumeCallback(&onUsbSuspended);
 
 	input_init();
-
-	print(31, 2, "Waiting for", 11, 128, false);
-	print(34, 3, "OracBridge", 10, 128, false);
-	print(55, 4, "...", 3, 128, false);
 }
 
 void print(uint8_t x, uint8_t line, const char *text, uint8_t n, uint8_t maxWidth, bool inverted)

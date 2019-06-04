@@ -149,10 +149,15 @@ void sh1106_reset()
 		sh1106_set_mirror_x(true);
 		sh1106_set_mirror_y(false);
 		sh1106_set_contrast_reg(0xff);
-		sh1106_set_display_enable(true);
 	}
 
 	sh1106_clear();
+
+	{
+		Transaction t;
+		sh1106_mode(COMMAND);
+		sh1106_set_display_enable(true);
+	}
 }
 
 void sh1106_clear()
