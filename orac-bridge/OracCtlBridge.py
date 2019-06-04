@@ -53,6 +53,7 @@ class Orac:
 		self.oscDispatcher.map("/P*Desc", self.paramDescHandler)
 		self.oscDispatcher.map("/P*Ctrl", self.paramCtrlHandler)
 		self.oscDispatcher.map("/P*Value", self.paramValueHandler)
+		self.oscDispatcher.map("/module", self.moduleHandler)
 		self.oscDispatcher.map("/*", self.allOtherHandler)
 
 		self.server = BlockingOSCUDPServer(('', args.listen), self.oscDispatcher)
@@ -67,8 +68,14 @@ class Orac:
 		self.paramCtrlChangedCallbacks = []
 
 		self.lineChangedNotificationsEnabled = True
-		self.timer = None
+		self.screenTimer = None
 		self.linesSnapshot = None
+
+		self.paramNotificationsEnabled = True
+		self.paramTimer = None
+		self.paramsSnapshot = None
+
+		self.changingModule = False
 
 	def navigationActivate(self):
 		self.client.send_message("/NavActivate", 1.0)
@@ -79,25 +86,66 @@ class Orac:
 	def navigationPrevious(self):
 		self.client.send_message("/NavPrev", 1.0)
 
-	def clearParams(self):
+	# reallyClear is set to True when switching modules.
+	# It is set to False when changing pages. We can't know how many pages there are,
+	# therefore we try to change a page, if we don't receive any param info, we assume the
+	# page didn't change, as it's either the first or the last one, so we keep the values
+	# we had before.
+	def clearParams(self, reallyClear):
+		self.paramNotificationsEnabled = False
+
+		if self.paramTimer != None:
+			self.paramTimer.cancel()
+		else:
+			self.paramsSnapshot = self.params.copy()
+
+		self.paramTimer = Timer(0.2, self.handleParamUpdate, args=(reallyClear,))
+		self.paramTimer.start()
+
 		self.params = [{"name": "", "value": "", "ctrl": 0.0} for _ in range(Orac.MAX_PARAMS)]
-		for i in range(Orac.MAX_PARAMS):
-			self.notifyParamNameChanged(i, "")
-			self.notifyParamValueChanged(i, "")
-			self.notifyParamCtrlChanged(i, 0.0)
+
+	def handleParamUpdate(self, reallyClear):
+		if self.params == [{"name": "", "value": "", "ctrl": 0.0} for _ in range(Orac.MAX_PARAMS)]:
+			if not reallyClear:
+				self.params = self.paramsSnapshot
+			else:
+				for i in range(Orac.MAX_PARAMS):
+					self.notifyParamNameChanged(i, "")
+					self.notifyParamValueChanged(i, "")
+					self.notifyParamCtrlChanged(i, None)
+		else:
+			for i in range(Orac.MAX_PARAMS):
+				if self.paramsSnapshot[i]["name"] != self.params[i]["name"]:
+					self.notifyParamNameChanged(i, self.params[i]["name"])
+				if self.paramsSnapshot[i]["value"] != self.params[i]["value"]:
+					self.notifyParamValueChanged(i, self.params[i]["value"])
+				self.notifyParamCtrlChanged(i, self.params[i]["ctrl"] if self.params[i]["name"] or self.params[i]["value"] else None)
+
+		self.paramNotificationsEnabled = True
+		self.paramTimer = None
+		self.paramsSnapshot = None
 
 	def moduleNext(self):
-		self.clearParams()
+		self.changingModule = True
 		self.client.send_message("/ModuleNext", 1.0)
 
 	def modulePrevious(self):
-		self.clearParams()
+		self.changingModule = True
 		self.client.send_message("/ModulePrev", 1.0)
+
+	def pageNext(self):
+		self.clearParams(False)
+		self.client.send_message("/PageNext", 1.0)
+
+	def pagePrevious(self):
+		self.clearParams(False)
+		self.client.send_message("/PagePrev", 1.0)
 
 	def paramSet(self, param, value):
 		value = max(min(value, 1.0), 0.0)
 		self.client.send_message("/P%dCtrl" % (param+1), value)
-		self.notifyParamCtrlChanged(param, value)
+		if self.paramNotificationsEnabled:
+			self.notifyParamCtrlChanged(param, value)
 
 	def addLinesClearedCallback(self, cb):
 		self.linesClearedCallbacks.append(cb)
@@ -162,18 +210,21 @@ class Orac:
 					self.notifyLineChanged(i, self.lines[i], i == self.selectedLine)
 
 		self.lineChangedNotificationsEnabled = True
-		self.timer = None
+		self.screenTimer = None
 
 	def clearTextHandler(self, address, *osc_arguments):
+		if self.changingModule:
+			self.clearParams(True)
+
 		self.lineChangedNotificationsEnabled = False
 
-		if self.timer != None:
-			self.timer.cancel()
+		if self.screenTimer != None:
+			self.screenTimer.cancel()
 		else:
 			self.linesSnapshot = self.lines.copy()
 
-		self.timer = Timer(0.2, self.handleScreenUpdate)
-		self.timer.start()
+		self.screenTimer = Timer(0.2, self.handleScreenUpdate)
+		self.screenTimer.start()
 
 		self.lines = [""]*Orac.MAX_LINES
 
@@ -185,19 +236,25 @@ class Orac:
 		i = Orac.decodeParamId(address)
 		if self.params[i]["name"] != osc_arguments[0]:
 			self.params[i]["name"] = osc_arguments[0]
-			self.notifyParamNameChanged(i, osc_arguments[0])
+			if self.paramNotificationsEnabled:
+				self.notifyParamNameChanged(i, osc_arguments[0])
 
 	def paramValueHandler(self, address, *osc_arguments):
 		i = Orac.decodeParamId(address)
 		if self.params[i]["value"] != osc_arguments[0]:
 			self.params[i]["value"] = osc_arguments[0]
-			self.notifyParamValueChanged(i, osc_arguments[0])
+			if self.paramNotificationsEnabled:
+				self.notifyParamValueChanged(i, osc_arguments[0])
+
+	def moduleHandler(self, address, *osc_arguments):
+		self.changingModule = False
 
 	def paramCtrlHandler(self, address, *osc_arguments):
 		i = Orac.decodeParamId(address)
 		if self.params[i]["ctrl"] != osc_arguments[0]:
 			self.params[i]["ctrl"] = osc_arguments[0]
-			self.notifyParamCtrlChanged(i, osc_arguments[0])
+			if self.paramNotificationsEnabled:
+				self.notifyParamCtrlChanged(i, osc_arguments[0])
 
 	def allOtherHandler(self, address, *osc_arguments):
 		print(address, osc_arguments)
@@ -277,6 +334,10 @@ class OracCtl:
 		msg = [0xf0, 0x41 if inverted else 0x01, i, int(ctrl * 127), 0xf7]
 		self.midiOut.send_message(msg)
 
+	def deleteCtrl(self, i):
+		msg = [0xf0, 0x04, i, 0xf7]
+		self.midiOut.send_message(msg)
+
 	def clearScreen(self):
 		msg = [0xf0, 0x02, 0xf7]
 		self.midiOut.send_message(msg)
@@ -296,6 +357,7 @@ class Controller:
 		self.lines = [{"text": "", "inverted": False} for _ in range(Orac.MAX_LINES)]
 		self.params = [{"name": "", "value": "", "ctrl": 0.0} for _ in range(Orac.MAX_PARAMS)]
 		self.selectedParam = 0
+		self.changingParam = None
 
 		self.orac = orac
 		self.oracCtl = oracCtl
@@ -324,6 +386,7 @@ class Controller:
 		elif mode == Controller.Mode.PARAMS:
 			paramFound = False
 			self.selectedParam = 0
+			self.changingParam = None
 			for i in range(Orac.MAX_PARAMS):
 				if self.isParamDefined(i):
 					paramFound = True
@@ -349,20 +412,24 @@ class Controller:
 	def onParamNameChanged(self, sender, i, name):
 		self.params[i]["name"] = name
 		if self.mode == Controller.Mode.PARAMS:
-			self.oracCtl.printParam(i, self.params[i]["name"], self.params[i]["value"], i == self.selectedParam)
+			self.oracCtl.printParam(i, self.params[i]["name"], self.params[i]["value"], i == self.selectedParam and self.changingParam == None)
 
 	def onParamValueChanged(self, sender, i, value):
 		self.params[i]["value"] = value
 		if self.mode == Controller.Mode.PARAMS:
-			self.oracCtl.printParam(i, self.params[i]["name"], self.params[i]["value"], i == self.selectedParam)
+			self.oracCtl.printParam(i, self.params[i]["name"], self.params[i]["value"], i == self.selectedParam and self.changingParam == None)
 
 	def onParamCtrlChanged(self, sender, i, ctrl):
 		self.params[i]["ctrl"] = ctrl
 		if self.mode == Controller.Mode.PARAMS:
-			self.oracCtl.printCtrl(i, self.params[i]["ctrl"], i == self.selectedParam)
+			if self.isParamDefined(i):
+				self.oracCtl.printCtrl(i, self.params[i]["ctrl"], i == self.selectedParam)
+			else:
+				self.oracCtl.deleteCtrl(i)
 
 	def selectNextParam(self):
 		prev = self.selectedParam
+		self.changingParam = None
 		if self.selectedParam+1 < Orac.MAX_PARAMS and self.isParamDefined(self.selectedParam+1):
 			self.selectedParam += 1
 		else:
@@ -376,6 +443,7 @@ class Controller:
 
 	def selectPrevParam(self):
 		prev = self.selectedParam
+		self.changingParam = None
 		if self.selectedParam > 0:
 			self.selectedParam -= 1
 		else:
@@ -402,10 +470,18 @@ class Controller:
 	def activateParam(self, param):
 		if not self.isParamDefined(param):
 			return
+
+		self.changingParam = param
+		self.oracCtl.printParam(param, self.params[param]["name"], self.params[param]["value"], False)
+		self.oracCtl.printCtrl(param, self.params[param]["ctrl"], True)
+
 		# Make a dummy change so this param can be mapped.
-		orac.paramSet(param, self.params[param]["ctrl"] + 0.00001)
-		orac.paramSet(param, self.params[param]["ctrl"] - 0.00001)
 		orac.paramSet(param, self.params[param]["ctrl"])
+
+	def deactivateParam(self):
+		self.changingParam = None
+		self.oracCtl.printParam(self.selectedParam, self.params[self.selectedParam]["name"], self.params[self.selectedParam]["value"], True)
+		self.oracCtl.printCtrl(self.selectedParam, self.params[self.selectedParam]["ctrl"], True)
 
 	def onButtonEvent(self, sender, button, down):
 		if not down:
@@ -429,16 +505,25 @@ class Controller:
 		elif self.mode == Controller.Mode.PARAMS:
 			if button == OracCtl.Button.Down:
 				self.selectNextParam()
-				self.activateParam(self.selectedParam)
 			elif button == OracCtl.Button.Up:
 				self.selectPrevParam()
-				self.activateParam(self.selectedParam)
 			elif button == OracCtl.Button.Right:
-				self.increaseParam(self.selectedParam)
+				if self.changingParam == None:
+					self.selectedParam = 0
+					self.orac.pageNext()
+				else:
+					self.increaseParam(self.selectedParam)
 			elif button == OracCtl.Button.Left:
-				self.decreaseParam(self.selectedParam)
+				if self.changingParam == None:
+					self.selectedParam = 0
+					self.orac.pagePrevious()
+				else:
+					self.decreaseParam(self.selectedParam)
 			elif button == OracCtl.Button.A:
-				self.activateParam(self.selectedParam)
+				if self.changingParam == None:
+					self.activateParam(self.selectedParam)
+				else:
+					self.deactivateParam()
 
 orac = Orac(args.ip, args.port)
 oracCtl = OracCtl()
@@ -449,6 +534,6 @@ try:
 finally:
 	del ctrl
 	del oracCtl
-	orac.shutdown()
+	#orac.shutdown()
 	del orac
 	print("Done!")

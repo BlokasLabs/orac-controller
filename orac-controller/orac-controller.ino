@@ -114,6 +114,12 @@ void printCtrl(uint8_t id, uint8_t v, bool inverted)
 	sh1106_draw_bitmap(&line, 1, inverted);
 }
 
+void clearCtrl(uint8_t id)
+{
+	sh1106_set_position(127-20-2, 7-(id&7));
+	sh1106_draw_space(22, false);
+}
+
 char g_messageBuffer[128 / 4];
 
 class CommandHandler
@@ -164,6 +170,9 @@ public:
 			case 0x03:
 				m_state = STATE_RECEIVING_VIEW_MODE;
 				break;
+			case 0x04:
+				m_state = STATE_RECEIVING_DELETE_CTRL;
+				break;
 			default:
 				m_state = STATE_WAITING_FOR_COMMAND;
 				break;
@@ -191,6 +200,9 @@ public:
 			}
 			return;
 		case STATE_RECEIVING_VIEW_MODE:
+			m_counter = b;
+			return;
+		case STATE_RECEIVING_DELETE_CTRL:
 			m_counter = b;
 			return;
 		}
@@ -224,6 +236,8 @@ private:
 				break;
 			}
 			break;
+		case STATE_RECEIVING_DELETE_CTRL:
+			clearCtrl(m_counter);
 		}
 	}
 
@@ -235,6 +249,7 @@ private:
 		STATE_RECEIVING_CTRL,
 		STATE_RECEIVING_CLEAR_SCREEN,
 		STATE_RECEIVING_VIEW_MODE,
+		STATE_RECEIVING_DELETE_CTRL,
 		STATE_SYSEX_END,
 	};
 
