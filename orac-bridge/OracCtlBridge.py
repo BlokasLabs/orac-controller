@@ -135,7 +135,7 @@ class Orac:
 			cb(self, i, ctrl)
 
 	def run(self):
-		self.server.serve_forever()
+		self.server.serve_forever(0.1)
 
 	def textHandler(self, address, *osc_arguments):
 		i = osc_arguments[0]-1
@@ -227,8 +227,8 @@ class OracCtl:
 		self.midiOut = rtmidi.MidiOut()
 		self.midiIn = rtmidi.MidiIn()
 
-		self.midiOut.open_port(OracCtl.findOracCtlPort(self.midiOut))
-		self.midiIn.open_port(OracCtl.findOracCtlPort(self.midiIn))
+		self.midiOut.open_port(OracCtl.findOracCtlPort(self.midiOut), name="OracBridgeOut")
+		self.midiIn.open_port(OracCtl.findOracCtlPort(self.midiIn), name="OracBridgeIn")
 		self.midiIn.ignore_types(sysex=False)
 		self.midiIn.set_callback(self.midiInCallback)
 
