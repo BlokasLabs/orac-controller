@@ -1,6 +1,6 @@
 [Unit]
 Description=Orac <-> Midiboy bridge daemon.
-After=sound.target
+After=mec.service
 
 [Service]
 ExecStart=/usr/local/bin/OracCtlBridge.py
