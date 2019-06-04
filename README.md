@@ -11,6 +11,7 @@ It's required to be using 1.0.2 Blokas Boards definition files, here's how to up
 3. Search for 'Blokas'.
 4. If the version shows up as 1.0.2, update is not needed.
 5. Otherwise, highlight the Blokas AVR boards entry and click Install at the bottom right.
+6. Once complete, select Midiboy again in Tools->Board.
 
 ### Sketch and Bridge Install
 
