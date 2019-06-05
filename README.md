@@ -1,5 +1,7 @@
 # Midiboy &lt;-> Orac UI
 
+![](screens/orac.gif?raw=true)
+
 ## Getting Started
 
 ### 1.0.2 Blokas Boards
