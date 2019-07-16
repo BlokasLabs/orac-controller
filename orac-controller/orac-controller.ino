@@ -17,22 +17,18 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
+#include <Midiboy.h>
 #include <usbmidi.h>
-#include "input.h"
-#include "SH1106.h"
-#include "font.h"
 
-#include "usbdrv.h"
-
-#define FONT_WIDTH FONT_5X7_WIDTH
-#define FONT FONT_5X7
+#define FONT_WIDTH MIDIBOY_FONT_5X7::WIDTH
+#define FONT MIDIBOY_FONT_5X7::DATA_P
 
 void showInitialScreen()
 {
-	sh1106_clear();
-	print(31, 2, "Waiting for", 11, 128, false);
-	print(34, 3, "OracBridge", 10, 128, false);
-	print(55, 4, "...", 3, 128, false);
+	Midiboy.clearScreen();
+	print(31, 2, "Waiting for", 11, 128-31, false);
+	print(34, 3, "OracBridge", 10, 128-34, false);
+	print(55, 4, "...", 3, 128-55, false);
 }
 
 void onUsbSuspended(bool suspended)
@@ -43,17 +39,15 @@ void onUsbSuspended(bool suspended)
 
 void setup()
 {
-	sh1106_init(SS, PIN_LCD_DC, PIN_LCD_RESET);
+	Midiboy.begin();
 	showInitialScreen();
 
 	USBMIDI.setSuspendResumeCallback(&onUsbSuspended);
-
-	input_init();
 }
 
 void print(uint8_t x, uint8_t line, const char *text, uint8_t n, uint8_t maxWidth, bool inverted)
 {
-	sh1106_set_position(x, 7-(line&7));
+	Midiboy.setDrawPosition(x, 7-(line&7));
 	uint8_t width = min(n*(FONT_WIDTH+1), maxWidth);
 	uint8_t spaces = maxWidth - width;
 	uint8_t counter = 0;
@@ -66,7 +60,7 @@ void print(uint8_t x, uint8_t line, const char *text, uint8_t n, uint8_t maxWidt
 			p = &FONT[(*text++ - ' ') * FONT_WIDTH];
 			break;
 		case FONT_WIDTH:
-			sh1106_draw_space(1, inverted);
+			Midiboy.drawSpace(1, inverted);
 			--n;
 			counter = 0;
 			continue;
@@ -74,18 +68,18 @@ void print(uint8_t x, uint8_t line, const char *text, uint8_t n, uint8_t maxWidt
 			break;
 		}
 
-		sh1106_draw_progmem_bitmap(p++, 1, inverted);
+		Midiboy.drawBitmap_P(p++, 1, inverted);
 		++counter;
 	}
 	if (spaces > 0)
 	{
-		sh1106_draw_space(spaces, inverted);
+		Midiboy.drawSpace(spaces, inverted);
 	}
 }
 
 void clearScreen()
 {
-	sh1106_clear();
+	Midiboy.clearScreen();
 }
 
 void printCtrl(uint8_t id, uint8_t v, bool inverted)
@@ -95,29 +89,29 @@ void printCtrl(uint8_t id, uint8_t v, bool inverted)
 	const uint8_t dot = 0x10;
 	v = 19.8f / 127.0f * v;
 
-	sh1106_set_position(127-20-2, 7-(id&7));
-	sh1106_draw_bitmap(&line, 1, inverted);
+	Midiboy.setDrawPosition(127-20-2, 7-(id&7));
+	Midiboy.drawBitmap(&line, 1, inverted);
 
 	uint8_t i;
 	for (i=0; i<v; ++i)
 	{
-		if (i%3 == 0) sh1106_draw_bitmap(&dot, 1, inverted);
-		else sh1106_draw_space(1, inverted);
+		if (i%3 == 0) Midiboy.drawBitmap(&dot, 1, inverted);
+		else Midiboy.drawSpace(1, inverted);
 	}
-	sh1106_draw_bitmap(&narrowerLine, 1, inverted);
+	Midiboy.drawBitmap(&narrowerLine, 1, inverted);
 	++i;
 	for (; i<20; ++i)
 	{
-		if (i%3 == 0) sh1106_draw_bitmap(&dot, 1, inverted);
-		else sh1106_draw_space(1, inverted);
+		if (i%3 == 0) Midiboy.drawBitmap(&dot, 1, inverted);
+		else Midiboy.drawSpace(1, inverted);
 	}
-	sh1106_draw_bitmap(&line, 1, inverted);
+	Midiboy.drawBitmap(&line, 1, inverted);
 }
 
 void clearCtrl(uint8_t id)
 {
-	sh1106_set_position(127-20-2, 7-(id&7));
-	sh1106_draw_space(22, false);
+	Midiboy.setDrawPosition(127-20-2, 7-(id&7));
+	Midiboy.drawSpace(22, false);
 }
 
 char g_messageBuffer[128 / 4];
@@ -228,11 +222,11 @@ private:
 			{
 			case MODE_MENU:
 				m_maxWidth = 128;
-				input_set_repeat_ms(300);
+				Midiboy.setButtonRepeatMs(300);
 				break;
 			case MODE_PARAMS:
 				m_maxWidth = 104;
-				input_set_repeat_ms(100);
+				Midiboy.setButtonRepeatMs(100);
 				break;
 			}
 			break;
@@ -272,21 +266,19 @@ CommandHandler g_handler;
 
 void loop()
 {
-	while (USBMIDI.available())
+	Midiboy.think();
+
+	while (Midiboy.usbMidi().available())
 	{
-		g_handler.process(USBMIDI.read());
+		g_handler.process(Midiboy.usbMidi().read());
 	}
 
-	input_update();
-
-	InputEvent event;
-	while (input_get_event(event))
+	MidiboyInput::Event event;
+	while (Midiboy.readInputEvent(event))
 	{
-		bool on = event.m_event == EVENT_DOWN;
-		USBMIDI.write(0xf0);
-		USBMIDI.write(event.m_button | (on ? 0x40 : 0x00));
-		USBMIDI.write(0xf7);
+		bool on = event.m_type == MidiboyInput::EVENT_DOWN;
+		Midiboy.usbMidi().write(0xf0);
+		Midiboy.usbMidi().write(event.m_button | (on ? 0x40 : 0x00));
+		Midiboy.usbMidi().write(0xf7);
 	}
-
-	USBMIDI.poll();
 }
